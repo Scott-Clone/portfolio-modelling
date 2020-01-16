@@ -1,0 +1,374 @@
+---
+title: "Modelling a Diversified Portfolio"
+author: "Carlone Scott"
+date: "16/01/2020"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r lib, include = FALSE, warning = FALSE}
+library(PortfolioAnalytics)
+library(PerformanceAnalytics)
+library(quantmod)
+library(zoo)
+library(plotly)
+library(tidyquant)
+library(dplyr)
+library(DEoptim)
+library(ROI)
+require(ROI.plugin.glpk)
+require(ROI.plugin.quadprog)
+library(xts)
+```
+
+```{r load_pack, include = FALSE}
+load("jse_price.RDS")
+load("jse_returs.RDS")
+load("bnsj.RDS")
+load("cement.RDS")
+load("grace.RDS")
+```
+
+## Outline
+
+- What are our objectives?
+- Why Jamaica Stock Exchange (JSE)
+- Company’s Profile for Portfolio
+- Methodology 
+- Analysis
+- Conclusion
+- References
+
+## Objective 
+
+An investor would like to invest in the JSE, we want to present a model of a diversified portfolio that optimizes returns given the share price movements of the market
+
+
+## Why would an invester want to invest in the JSE?
+
+```{r, echo=FALSE,out.width="30%", out.height="20%", fig.cap="",fig.show='hold', fig.align='center'}
+knitr::include_graphics(c("ja.png", "bob.png", "bolt.jpg"))
+``` 
+
+## Motivation for choosing JSE stocks
+
+Best performing stock market in the world for 2015 and again in 2019 by Bloomberg. 
+
+```{r, echo=FALSE,out.width="80%", out.height="80%", fig.cap="",fig.show='hold', fig.align='center'}
+knitr::include_graphics(c("jse_v_markets.png"))
+``` 
+
+## Jamaica Stock Exchange (JSE) 
+
+Wall street flew the Jamaican flag on Wall street. 
+
+```{r, echo=FALSE,out.width="49%", out.height="20%", fig.cap="",fig.show='hold', fig.align='center'}
+knitr::include_graphics(c("jse_wallst.png"))
+``` 
+
+## Jamaica Stock Exchange (JSE) 
+
+Nasdaq to deliver tech to Nasdaq
+
+```{r, echo=FALSE,out.width="49%", out.height="20%", fig.cap="",fig.show='hold', fig.align='center'}
+knitr::include_graphics(c("jse_nas.png"))
+``` 
+
+
+```{r price_plots, echo = TRUE, include = FALSE}
+plot_price <- function(data, title) {
+  plotly::plot_ly(
+    data = data,
+    x = ~ Date,
+    y = ~ `Close.Price`,
+    type = "scatter",
+    mode = "lines"
+  ) %>% layout(
+    title = title,
+    xaxis = list(
+      type = "date"
+    ),
+    yaxis = list(
+      title = "Price"
+    )
+  )
+}
+```
+
+## Scotia Group Jamaica
+
+- Bank of the Year 2013 and best FX trader in Jamaica
+- Been in Jamaica for over 125 years
+- Banking Services , Insurance, Investments, Mortgage etc.
+
+
+```{r, echo=FALSE,out.width="49%", out.height="20%", fig.cap="",fig.show='hold', fig.align='center'}
+knitr::include_graphics(c("sgj.png"))
+``` 
+
+## Caribbean Cement Company
+
+- Primary cement and gypsum manufacturer & supplier Caribbean
+- 60 year old company 
+- Current growth due to boom of the construction industry
+
+```{r, echo=FALSE,out.width="49%", out.height="20%", fig.cap="",fig.show='hold', fig.align='center'}
+knitr::include_graphics(c("ccc.png"))
+``` 
+
+## Grace Kenedy Group
+- One of the Caribbean's largest conglomerates
+- Diversified companies in the Caribbean, Europe and North America.
+
+```{r, echo=FALSE,out.width="49%", out.height="30%", fig.cap="",fig.show='hold', fig.align='center'}
+knitr::include_graphics(c("gkj.png"))
+``` 
+
+## JSE Stocks prices
+
+### Scotia Group Jamaica (Jan 2013 - Jan 2020)
+
+```{r}
+# Plot series for Price of 3 chosen stocks
+plot_price(
+  data = bnsj, 
+  title = ""
+)
+```
+
+## JSE Stocks prices
+
+### Caribbean Cement Co. (Jan 2013 - Jan 2020)
+
+```{r}
+plot_price(
+  data = cement, 
+  title = ""
+)
+```
+
+## JSE Stocks prices 
+
+### Grace Kenedy Group (Jan 2013 - Jan 2020)
+
+```{r}
+plot_price(
+  data = grace, 
+  title = ""
+)
+```
+
+## Methodology - Definitions
+
+**Portfolio Return:**
+
+$$R_p = w_1R_1+w_2R_2+...+w_nRn$$
+  
+**Expected Return:**
+
+$$E(R_p) = w_1E(R_1)+w_2E(R_2)+...+w_nE(Rn)$$
+
+**Covariance:**
+
+$$\sigma^2(R_p)=E[(R_p-E(R_p))^2]$$
+  
+**Standard Deviation (Risk):** 
+
+$$\sigma(R_p)=(E[(R_p-E(R_p))^2])^{1/2}$$
+  
+## Methodology - Markov Chain Model
+
+The sequence of consecutive trials such that:
+
+$$Pr\{X_{n}=j\mid X_{n-1}=i_{n-1}, \dots,X_0=i_o\}$$
+$$= Pr\{X_{n}=j\mid X_{n-1}=i_{n-1}\}~~~~~~~~$$
+
+Where order of subscripts in $P_{ij}$ below corresponds to the direction of transition $i > j$
+
+$$Pr\{X_{n}=j\mid X_{n-1}=i\}=P_{ij}$$
+
+```{r, include = FALSE}
+# Returns
+ja_returns <- jse_returs
+
+# Price
+ja_price <- jse_price
+
+```
+
+## Analysis - Portfolio specification
+
+```{r, p_1, echo = TRUE}
+ja_folio <- portfolio.spec(assets = colnames(ja_returns))
+ja_folio  <- add.constraint(
+  portfolio = ja_folio , 
+  type = "box", 
+  min = 0.05, 
+  max = 0.65
+)
+
+ja_folio  <- add.constraint(
+  portfolio = ja_folio , 
+  type = "leverage", # "full_investment"
+  min_sum = 0.99,  
+  max_sum = 1.01
+) 
+```
+
+## Analysis - Portfolio specification
+
+### Maximize the mean return with ROI
+
+```{r, p_2, echo = TRUE}
+max_return <- add.objective(
+  portfolio = ja_folio , 
+  type = "return", 
+  name = "mean"
+) 
+```
+
+### Optimize
+
+```{r, p_3, echo = TRUE}
+opt_max_return <- optimize.portfolio(
+  R = ja_returns, 
+  portfolio = max_return, 
+  optimize_method = "ROI",
+  trace = TRUE
+)
+```
+
+## Looking at results
+
+```{r, p_4, echo = FALSE}
+# print.default(opt_max_return)
+```
+
+
+```{r, p_5, echo = TRUE}
+
+print(opt_max_return$data_summary)
+print(opt_max_return$weights)
+```
+
+## Plot optimized maximum mean
+
+```{r, p_6, echo = FALSE}
+plot(
+  opt_max_return,  
+  risk.col = "StdDev",  
+  return.col = "mean",
+  main = "Minimum Variance Optimization", 
+  chart.assets = TRUE,
+  xlim = c(0.5, 1.5), 
+  ylim = c(-0.1, 0.1)
+)
+```
+
+## Minimize variance with Return On Iinvestment (ROI)
+
+```{r, p_8, echo = TRUE}
+min_var <- add.objective(
+  portfolio = ja_folio , 
+  type = "risk",
+  name = "var"
+)
+```
+
+### Optimize. 
+
+Note that although `var` is the risk metric, `StdDev` is returned as an objective measure.
+
+```{r, p_9, echo = TRUE}
+opt_min_var <- optimize.portfolio(
+  R = ja_returns, 
+  portfolio = min_var,
+  optimize_method = "ROI",  
+  trace = TRUE
+)
+```
+
+## Look at the results
+
+```{r, p_10, echo = TRUE}
+
+print(opt_min_var$data_summary)
+print(opt_min_var$weights)
+```
+
+## Plot optimized minimum variance
+
+```{r, echo = FALSE}
+plot(
+  opt_min_var, 
+  risk.col = "StdDev", 
+  return.col = "mean",
+  main = "Minimum Variance Optimization", 
+  chart.assets = TRUE,
+  xlim = c(0.5, 1.5), 
+  ylim = c(-0.1, 0.1)
+)
+```
+
+## Efficient Frontier
+
+```{r, echo = TRUE, warning = FALSE}
+meansd_ef <- create.EfficientFrontier(
+  R = ja_returns,
+  portfolio = ja_folio ,
+  type = "mean-sd",
+  n.portfolios = 20,
+)
+```
+
+## Efficient Frontier
+```{r, echo = FALSE}
+
+chart.EfficientFrontier(
+  meansd_ef,
+  match.col = "StdDev", # which column to use for risk
+  type = "l",
+  RAR.text = "Sharpe Ratio",
+  tangent.line = FALSE,
+  chart.assets = TRUE,
+  labels.assets = TRUE,
+  xlim = c(0.5, 1.5),
+  ylim = c(-0.1, 0.1),
+  element.color = "gray"
+)
+```
+
+
+
+
+
+## Conclusion - some numbers from a 2016 study
+
+- An investment of \$2000 in an equally weighted portfolio (consisting of CCC, GK and SGJ shares) would result in a return of \$9850.96 over a two year period 
+
+- Returns for the CCC from the acquired data revealed a return of 319% and 691% for the years 2013 and 2014 respectively (this is due to a boom in the construction industry)
+
+## Reference
+
+- Fieser, E. (2015, December 24) It's Jammin': Jamaica's Tiny Stock Market Conquers World in 2015, Retrieved from http://www.bloomberg.com/news/articles/2015-12-24/it-s-jammin-jamaica-s-tiny-stock-market-conquers-world-in-2015
+
+- Jamaica Stock Exchange Market Data (2016, May 25), Retreived from https://www.jamstockex.com/market-data/summary/
+
+- Davou Nyap Choji, Samuel Ngbebe Eduno, Gokum Titus Kassem, (2013) Markov Chain Model Application on Share Price Movement in Stock Market, Computer Engineering and Intelligence Systems , (Vol. 4, No.10). 
+
+- Ching, W. Ng, (2006) M.Markov Chains: Models, Algorithms and Applications. 
+
+## Questions
+
+```{r, echo=FALSE,out.width="20%", out.height="10%", fig.cap="",fig.show='hold', fig.align='center'}
+knitr::include_graphics(c("ques.png"))
+``` 
+
+
+Let's p**R**actice
+
+
+

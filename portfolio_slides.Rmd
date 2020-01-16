@@ -1,0 +1,47 @@
+---
+title: "Modelling a Diversified Portfolio"
+author: "Precision Analytics"
+date: "16/01/2020"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Outline
+
+- Introduction 
+- Background JSE & Company’s Profile for Portfolio
+- Company’s Profile for Portfolio
+- Methodology 
+- Analysis
+- Conclusion
+- References
+
+## Introduction  
+
+The Jamaica Stock Exchange was rated the best performing stock market in the world for 2015 and again in 2019 by Bloomberg. 
+
+![jse](jse_wallst.png)
+
+### Nasdaq to deliver tech to Nasdaq
+![jse](jse_nas.png)
+
+
+## Objective 
+
+An investor would like to invest in the JSE, we want to present a model of a diversified portfolio that optimizes returns given the share price movements of the market
+
+## Slide with R Output
+
+```{r cars, echo = TRUE}
+summary(cars)
+```
+
+## Slide with Plot
+
+```{r pressure}
+plot(pressure)
+```
+
